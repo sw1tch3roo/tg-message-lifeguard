@@ -1,43 +1,61 @@
+"""
+This module handles the export of deleted Telegram messages and media using Telethon.
+It supports various export model based on user inputs,
+including exporting all deleted messages, media only, or text-only messages.
+"""
+
 import os
-import time
-from typing import Optional
+import asyncio
 from telethon import TelegramClient
 from telethon.tl.types import PeerChannel
-import asyncio
+from telethon.errors import RPCError
 
-# Запрашиваем данные у пользователя
-api_id: int = int(input("Введите ваш api_id: "))
-api_hash: str = input("Введите ваш api_hash: ")
+# Requesting user credentials
+api_id: int = int(input("Enter your api_id: "))
+api_hash: str = input("Enter your api_hash: ")
 
 session_name: str = "session_name"
 session_file: str = f"{session_name}.session"
 
-# Удаляем файл сессии, если он существует
+# Set the output folder
+output_folder: str = "backup_will_be_inside_me"
+os.makedirs(output_folder, exist_ok=True)  # Create the folder if it doesn't exist
+
+# Remove session file if it exists
 if os.path.exists(session_file):
     os.remove(session_file)
-    print(f"Удален существующий файл сессии: {session_file}")
+    print(f"Existing session file removed: {session_file}")
 
-# Инициализация клиента
+# Initialize Telegram client
 client: TelegramClient = TelegramClient(session_name, api_id, api_hash)
 client.start()
 
 
 async def export_messages(
-    group_id: int,
+    target_group_id: int,
     mode: int,
     min_id: int = 0,
     max_id: int = 0,
 ) -> None:
-    group: PeerChannel = await client.get_entity(PeerChannel(group_id))
+    """
+    Exports messages from a Telegram group or channel.
 
-    # Проверяем, существует ли файл, чтобы дописать, а не перезаписать
-    file_mode: str = "a" if os.path.exists("dump.json") else "w"
+    :param group_id: ID of the Telegram group or channel.
+    :param mode: Export mode (1 - all, 2 - media only, 3 - text only).
+    :param min_id: Minimum message ID to export.
+    :param max_id: Maximum message ID to export.
+    """
+    group: PeerChannel = await client.get_entity(PeerChannel(target_group_id))
+    # Define the dump file path
+    dump_file = os.path.join(output_folder, "dump.json")
+    # Check if the file exists to append data instead of overwriting
+    file_mode: str = "a" if os.path.exists(dump_file) else "w"
 
-    with open("dump.json", file_mode) as dump:
-        c: int = 0  # Счётчик текстовых сообщений
-        m: int = 0  # Счётчик медиа
+    with open(dump_file, file_mode, encoding="utf-8") as dump:
+        c: int = 0  # Counter for text messages
+        m: int = 0  # Counter for media messages
 
-        limit_per_request: int = 100  # Количество событий за запрос
+        limit_per_request: int = 100  # Number of events per request
 
         try:
             async for event in client.iter_admin_log(
@@ -45,74 +63,68 @@ async def export_messages(
                 min_id=min_id,
                 max_id=max_id,
                 limit=limit_per_request,
-                delete=True,  # Интересуемся только удалёнными сообщениями
+                delete=True,  # Only interested in deleted messages
             ):
-                # фильтруем и обрабатываем сообщения
-                if (
-                    event.deleted_message and event.old.id >= min_id
-                ):  # Проверяем, удалено ли сообщение и соответствует ли min_id
-                    if mode == 1:  # Экспорт всех текстов и медиа
-                        dump.write(
-                            event.old.to_json() + ","
-                        )  # Записываем сообщение в файл
+                # Filter and process messages
+                if event.deleted_message and event.old.id >= min_id:
+                    if mode == 1:  # Export all text and media
+                        dump.write(event.old.to_json() + ",")
                         c += 1
                         print(
-                            f"Сохранено сообщение {c} (ID: {event.old.id}, Дата: {event.old.date})"
+                            f"Saved message {c} (ID: {event.old.id}, Date: {event.old.date})"
                         )
 
-                        if event.old.media:  # Если есть медиа, загружаем
+                        if event.old.media:  # Download media if available
                             m += 1
                             await client.download_media(
-                                event.old.media, str(event.old.id)
+                                event.old.media,
+                                os.path.join(output_folder, str(event.old.id))
                             )
                             print(
-                                f"Сохранен медиафайл {m} (ID: {event.old.id}, Дата: {event.old.date})"
+                                f"Saved media file {m} (ID: {event.old.id}, Date: {event.old.date})"
                             )
 
-                    elif mode == 2 and event.old.media:  # Экспорт только медиа
+                    elif mode == 2 and event.old.media:  # Export media only
                         m += 1
-                        await client.download_media(event.old.media, str(event.old.id))
+                        await client.download_media(
+                            event.old.media,
+                            os.path.join(output_folder, str(event.old.id)))
                         print(
-                            f"Сохранен медиафайл {m} (ID: {event.old.id}, Дата: {event.old.date})"
+                            f"Saved media file {m} (ID: {event.old.id}, Date: {event.old.date})"
                         )
 
-                    elif (
-                        mode == 3 and not event.old.media
-                    ):  # Экспорт только текстовых сообщений
-                        dump.write(
-                            event.old.to_json() + ","
-                        )  # Записываем текстовое сообщение в файл
+                    elif mode == 3 and not event.old.media:  # Export text only
+                        dump.write(event.old.to_json() + ",")
                         c += 1
                         print(
-                            f"Сохранено текстовое сообщение {c} (ID: {event.old.id}, Дата: {event.old.date})"
+                            f"Saved text message {c} (ID: {event.old.id}, Date: {event.old.date})"
                         )
 
-                    await asyncio.sleep(
-                        0.1
-                    )  # Небольшая пауза, чтобы избежать блокировки
+                    await asyncio.sleep(0.1)  # Short pause to avoid blocking
 
-            print(
-                "Загрузка завершена, новых сообщений нет."
-            )  # Сообщение после завершения итерации
+            print("Export completed, no new messages found.")
 
-        except Exception as e:
-            print(f"Произошла ошибка: {e}")
+        except RPCError as e:
+            print(f"An error occurred: {e}")
 
 
-# Запрашиваем дополнительные данные у пользователя
+# Request additional details from the user
 export_mode: int = int(
-    input("Введите режим экспорта (1 - все, 2 - только медиа, 3 - только текст): ")
+    input("Enter export mode (1 - all, 2 - media only, 3 - text only): ")
 )
 min_message_id: int = int(
-    input("Введите минимальный ID сообщения (0 для начала с первого): ")
+    input("Enter the minimum message ID (0 to start from the first): ")
 )
 max_message_id: int = int(
-    input("Введите максимальный ID сообщения (0 для получения всех): ")
+    input("Enter the maximum message ID (0 to retrieve all): ")
 )
-group_id: int = int(input("Введите ID группы или канала: "))
+group_id: int = int(input("Enter the group or channel ID: "))
 
 
-async def main():
+async def main() -> None:
+    """
+    Main function to start the export process.
+    """
     await client.start()
     await export_messages(
         group_id, export_mode, min_id=min_message_id, max_id=max_message_id
