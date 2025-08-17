@@ -17,6 +17,8 @@ api_hash: str = input("Enter your api_hash: ")
 session_name: str = "session_name"
 session_file: str = f"{session_name}.session"
 
+app_version: str = "tg-message-lifeguard"
+
 # Set the output folder
 output_folder: str = "backup_will_be_inside_me"
 os.makedirs(output_folder, exist_ok=True)  # Create the folder if it doesn't exist
@@ -27,7 +29,7 @@ if os.path.exists(session_file):
     print(f"Existing session file removed: {session_file}")
 
 # Initialize Telegram client
-client: TelegramClient = TelegramClient(session_name, api_id, api_hash)
+client: TelegramClient = TelegramClient(session_name, api_id, api_hash, app_version)
 
 
 async def export_messages(
