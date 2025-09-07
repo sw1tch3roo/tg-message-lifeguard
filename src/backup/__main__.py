@@ -29,7 +29,7 @@ if os.path.exists(session_file):
     print(f"Existing session file removed: {session_file}")
 
 # Initialize Telegram client
-client: TelegramClient = TelegramClient(session_name, api_id, api_hash, app_version)
+client: TelegramClient = TelegramClient(session_name, api_id, api_hash)
 
 
 async def export_messages(
