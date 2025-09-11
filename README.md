@@ -18,9 +18,9 @@ Open the terminal (bash/zsh), which can be done directly inside VS Code.
 
 #### Creating a virtual environment:
 ```bash
-$ python3 -m venv venv
+$ python3 -m venv .venv
 ```
-Here, `venv` is the directory name that will contain your virtual environment. You can choose any name for this folder.
+Here, `.venv` is the directory name that will contain your virtual environment. You can choose any name for this folder.
 
 #### Activating the virtual environment:
 **MacOS/Linux:**
