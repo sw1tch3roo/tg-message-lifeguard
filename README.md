@@ -70,7 +70,7 @@ Follow the provided instructions to obtain these values. Store them securely for
 
 Run the backup module with the following command:
 ```bash
-$ python3 -m src.backup
+$ python -m src.backup
 ```
 
 The script will prompt you to enter:
